@@ -217,6 +217,14 @@ async def continue_case(cb: CallbackQuery, state: FSMContext) -> None:
 
 # ──────────────────────────── блокнот / меню ────────────────────────────
 
+@router.message(F.text == kb.BTN_CASE)
+async def open_case_file(message: Message) -> None:
+    case, sess = await _load(message.from_user.id)
+    if not case:
+        return await message.answer("Нет активного дела.")
+    await message.answer(_briefing(case, sess["moves_left"]))
+
+
 @router.message(F.text == kb.BTN_NOTEBOOK)
 async def open_notebook(message: Message) -> None:
     case, sess = await _load(message.from_user.id)
@@ -372,7 +380,7 @@ async def start_interrogation(cb: CallbackQuery, state: FSMContext) -> None:
 
 @router.message(Game.interrogating, F.text & ~F.text.in_(
     {kb.BTN_INTERROGATE, kb.BTN_SEARCH, kb.BTN_EVIDENCE, kb.BTN_CROSS,
-     kb.BTN_NOTEBOOK, kb.BTN_HINT, kb.BTN_ACCUSE, kb.BTN_LEAVE}))
+     kb.BTN_CASE, kb.BTN_NOTEBOOK, kb.BTN_HINT, kb.BTN_ACCUSE, kb.BTN_LEAVE}))
 async def interrogate_msg(message: Message, state: FSMContext) -> None:
     case, sess = await _load(message.from_user.id)
     if not case:
@@ -476,7 +484,7 @@ async def start_search(cb: CallbackQuery, state: FSMContext) -> None:
 
 @router.message(Game.searching, F.text & ~F.text.in_(
     {kb.BTN_INTERROGATE, kb.BTN_SEARCH, kb.BTN_EVIDENCE, kb.BTN_CROSS,
-     kb.BTN_NOTEBOOK, kb.BTN_HINT, kb.BTN_ACCUSE, kb.BTN_LEAVE}))
+     kb.BTN_CASE, kb.BTN_NOTEBOOK, kb.BTN_HINT, kb.BTN_ACCUSE, kb.BTN_LEAVE}))
 async def search_msg(message: Message, state: FSMContext) -> None:
     case, sess = await _load(message.from_user.id)
     if not case:
@@ -519,7 +527,7 @@ async def accused_chosen(cb: CallbackQuery, state: FSMContext) -> None:
 
 @router.message(Game.accusing, F.text & ~F.text.in_(
     {kb.BTN_INTERROGATE, kb.BTN_SEARCH, kb.BTN_EVIDENCE, kb.BTN_CROSS,
-     kb.BTN_NOTEBOOK, kb.BTN_HINT, kb.BTN_ACCUSE, kb.BTN_LEAVE}))
+     kb.BTN_CASE, kb.BTN_NOTEBOOK, kb.BTN_HINT, kb.BTN_ACCUSE, kb.BTN_LEAVE}))
 async def final_accusation(message: Message, state: FSMContext) -> None:
     case, sess = await _load(message.from_user.id)
     if not case:

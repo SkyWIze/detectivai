@@ -11,6 +11,7 @@ BTN_INTERROGATE = "👤 Допросить"
 BTN_SEARCH = "🔍 Осмотреть"
 BTN_EVIDENCE = "🎴 Улики"
 BTN_CROSS = "🗣 Очная ставка"
+BTN_CASE = "📁 Дело"
 BTN_NOTEBOOK = "📋 Блокнот"
 BTN_HINT = "💡 Подсказка"
 BTN_ACCUSE = "⚖️ Обвинить"
@@ -49,8 +50,9 @@ def game_kb() -> ReplyKeyboardMarkup:
         keyboard=[
             [KeyboardButton(text=BTN_INTERROGATE), KeyboardButton(text=BTN_SEARCH)],
             [KeyboardButton(text=BTN_EVIDENCE), KeyboardButton(text=BTN_CROSS)],
-            [KeyboardButton(text=BTN_NOTEBOOK), KeyboardButton(text=BTN_HINT)],
-            [KeyboardButton(text=BTN_ACCUSE), KeyboardButton(text=BTN_LEAVE)],
+            [KeyboardButton(text=BTN_CASE), KeyboardButton(text=BTN_NOTEBOOK)],
+            [KeyboardButton(text=BTN_HINT), KeyboardButton(text=BTN_ACCUSE)],
+            [KeyboardButton(text=BTN_LEAVE)],
         ],
         resize_keyboard=True,
     )
