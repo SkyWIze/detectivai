@@ -11,7 +11,7 @@ from aiogram.types import CallbackQuery, Message
 
 from bot import keyboards as kb
 from bot.states import Game
-from core import case_gen, forensics, hint, interrogate, judge, scoring, search, watson
+from core import case_gen, forensics, gathering, hint, interrogate, judge, scoring, search, watson
 from core.models import empty_state
 from core.sample_case import get_sample_case
 from config import config
@@ -188,7 +188,8 @@ _TUTORIAL_INTRO = (
     "узнаешь чьи следы, подлинность документа, связь с алиби и не подброшена ли она.\n"
     "• <b>🗣 Очная ставка</b> — припри одного показаниями другого.\n"
     "• <b>📋 Блокнот</b> — что нашёл и кого допросил.\n"
-    "• <b>⚖️ Обвинить</b> — назови убийцу и обоснуй. Ходы ограничены!\n\n"
+    "• <b>⚖️ Обвинить</b> — собери всех в гостиной, изложи версию вслух (зал реагирует!) "
+    "и вынеси вердикт. Ходы ограничены!\n\n"
     "🤝 Рядом с тобой — <b>напарник</b>: он подкинет реплику на находках и пойманных нестыковках "
     "(подсказку не выдаёт, просто думает вслух).\n\n"
     "💡 Подсказка для старта: осмотри <b>Библиотеку</b> и <b>Сад</b>, "
@@ -545,7 +546,7 @@ async def search_msg(message: Message, state: FSMContext) -> None:
             await message.answer(line)
 
 
-# ──────────────────────────── обвинение / финал ────────────────────────────
+# ──────────────────────────── обвинение / сбор в гостиной / финал ────────────────────────────
 
 @router.message(F.text == kb.BTN_ACCUSE)
 async def choose_accused(message: Message, state: FSMContext) -> None:
@@ -553,36 +554,71 @@ async def choose_accused(message: Message, state: FSMContext) -> None:
     if not case:
         return await message.answer("Нет активного дела.")
     await state.set_state(Game.accusing)
-    await message.answer("⚖️ Кого обвиняешь? (после выбора напишешь обоснование)",
+    await message.answer("⚖️ Кого выведешь на чистую воду? Назови — и собери всех в гостиной.",
                          reply_markup=kb.suspects_kb(case, prefix="accuse"))
 
 
 @router.callback_query(F.data.startswith("accuse:"))
 async def accused_chosen(cb: CallbackQuery, state: FSMContext) -> None:
     accused_id = cb.data.split(":", 1)[1]
+    case, sess = await _load(cb.from_user.id)
+    if not case:
+        return await cb.answer("Нет активного дела.", show_alert=True)
     await cb.answer()
     await state.update_data(accused_id=accused_id)
-    await cb.message.answer("Напиши обоснование: кто, как и почему. Это последнее слово, сыщик.")
+    sess["state"]["gathering"] = []  # начинаем сцену с чистого листа
+    await database.save_session(cb.from_user.id, sess["case_id"], "active",
+                                sess["moves_left"], sess["state"])
+    await state.set_state(Game.gathering)
+    name = next(s["name"] for s in case["suspects"] if s["id"] == accused_id)
+    await cb.message.answer(
+        f"🎭 <b>Гостиная.</b> Все в сборе. Ты медленно поворачиваешься к <b>{name}</b>…\n\n"
+        f"Изложи свою версию <b>своими словами</b>, обращаясь к залу: что произошло, как и почему. "
+        f"Пиши репликами — зал будет реагировать на каждую. Когда добьёшь версию, "
+        f"жми «{kb.BTN_VERDICT}» — и расставим все точки.",
+        reply_markup=kb.gathering_kb())
 
 
-@router.message(Game.accusing, F.text & ~F.text.in_(
-    {kb.BTN_INTERROGATE, kb.BTN_SEARCH, kb.BTN_EVIDENCE, kb.BTN_CROSS,
-     kb.BTN_CASE, kb.BTN_NOTEBOOK, kb.BTN_HINT, kb.BTN_ACCUSE, kb.BTN_LEAVE}))
-async def final_accusation(message: Message, state: FSMContext) -> None:
+@router.message(Game.gathering, F.text == kb.BTN_VERDICT)
+async def deliver_verdict(message: Message, state: FSMContext) -> None:
     case, sess = await _load(message.from_user.id)
     if not case:
         return await message.answer("Нет активного дела.")
     data = await state.get_data()
     accused_id = data.get("accused_id")
     if not accused_id:
-        return await message.answer("Сначала выбери подозреваемого кнопкой.")
+        return await message.answer("Сначала выбери, кого обвиняешь («⚖️ Обвинить»).")
+    speeches = [h["speech"] for h in sess["state"].get("gathering", [])]
+    if not speeches:
+        return await message.answer("Сначала обратись к залу хотя бы одной репликой — это и есть твоё обоснование.")
+    await _finish_case(message, state, case, sess, accused_id, " ".join(speeches))
 
-    verdict = await judge.judge_accusation(case, accused_id, message.text)
+
+@router.message(Game.gathering, F.text & ~F.text.in_(
+    {kb.BTN_VERDICT, kb.BTN_INTERROGATE, kb.BTN_SEARCH, kb.BTN_EVIDENCE, kb.BTN_CROSS,
+     kb.BTN_CASE, kb.BTN_NOTEBOOK, kb.BTN_HINT, kb.BTN_ACCUSE, kb.BTN_LEAVE}))
+async def gathering_msg(message: Message, state: FSMContext) -> None:
+    case, sess = await _load(message.from_user.id)
+    if not case:
+        return await message.answer("Нет активного дела.")
+    data = await state.get_data()
+    accused_id = data.get("accused_id")
+    if not accused_id:
+        return await message.answer("Сначала выбери, кого обвиняешь («⚖️ Обвинить»).")
+    reaction = await gathering.react(case, sess["state"], accused_id, message.text)
+    await database.save_session(message.from_user.id, sess["case_id"], "active",
+                                sess["moves_left"], sess["state"])
+    await message.answer(f"🎭 {reaction}")
+
+
+async def _finish_case(message: Message, state: FSMContext, case: dict, sess: dict,
+                       accused_id: str, justification: str) -> None:
+    """Вердикт судьи + театральное разоблачение + ранг + реплика напарника."""
+    verdict = await judge.judge_accusation(case, accused_id, justification)
     score, rank = scoring.compute(
         verdict["correct"], verdict.get("quality", 0),
         sess["moves_left"], sess["state"]["hints_used"],
     )
-
     await database.save_session(message.from_user.id, sess["case_id"], "finished",
                                 sess["moves_left"], sess["state"])
     await database.add_result(message.from_user.id, sess["case_id"], score, rank)

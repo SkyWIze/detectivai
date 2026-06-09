@@ -15,6 +15,7 @@ BTN_CASE = "📁 Дело"
 BTN_NOTEBOOK = "📋 Блокнот"
 BTN_HINT = "💡 Подсказка"
 BTN_ACCUSE = "⚖️ Обвинить"
+BTN_VERDICT = "⚖️ Вынести вердикт"
 BTN_LEAVE = "🚪 В меню"
 
 
@@ -52,6 +53,17 @@ def game_kb() -> ReplyKeyboardMarkup:
             [KeyboardButton(text=BTN_EVIDENCE), KeyboardButton(text=BTN_CROSS)],
             [KeyboardButton(text=BTN_CASE), KeyboardButton(text=BTN_NOTEBOOK)],
             [KeyboardButton(text=BTN_HINT), KeyboardButton(text=BTN_ACCUSE)],
+            [KeyboardButton(text=BTN_LEAVE)],
+        ],
+        resize_keyboard=True,
+    )
+
+
+def gathering_kb() -> ReplyKeyboardMarkup:
+    """Клавиатура сцены в гостиной: говорить залу свободным текстом или вынести вердикт."""
+    return ReplyKeyboardMarkup(
+        keyboard=[
+            [KeyboardButton(text=BTN_VERDICT)],
             [KeyboardButton(text=BTN_LEAVE)],
         ],
         resize_keyboard=True,

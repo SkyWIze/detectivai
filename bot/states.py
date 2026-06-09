@@ -8,4 +8,5 @@ class Game(StatesGroup):
     playing = State()          # игровой экран с постоянной клавиатурой
     interrogating = State()    # внутри допроса конкретного подозреваемого
     searching = State()        # внутри осмотра конкретной локации
-    accusing = State()         # ввод обвинения + обоснование
+    accusing = State()         # выбор обвиняемого
+    gathering = State()        # интерактивная сцена «сбор всех в гостиной» перед вердиктом
