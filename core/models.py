@@ -2,7 +2,10 @@
 
 Подробное описание полей — в КОНЦЕПТ.md, раздел 4.
 """
-from typing import NotRequired, TypedDict
+try:  # NotRequired появился в typing только в Python 3.11
+    from typing import NotRequired, TypedDict
+except ImportError:  # Python 3.10 (напр. на сервере) — берём из typing_extensions
+    from typing_extensions import NotRequired, TypedDict
 
 
 class Suspect(TypedDict):

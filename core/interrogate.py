@@ -11,7 +11,7 @@ from config import config
 
 log = logging.getLogger(__name__)
 
-_MAX_MEMORY = 6  # сколько последних реплик держим в контексте
+_MAX_MEMORY = 16  # сколько последних реплик отдаём в контекст модели (полная история хранится)
 
 # Слова-маркеры тона игрока (для оценки давления без лишних LLM-вызовов).
 _AGGRO = ("убил", "убийца", "признавайся", "сознавайся", "врёшь", "врешь", "лжёшь",
@@ -72,7 +72,9 @@ async def respond(
     cross_quote     — цитата другого свидетеля (перекрёстный допрос, изюминка №1).
     """
     suspect = _find(case, suspect_id)
-    history = state.get("suspect_dialogs", {}).get(suspect_id, [])[-_MAX_MEMORY:]
+    # полную историю храним целиком (не теряем старые показания), в модель — последние N
+    full_history = state.setdefault("suspect_dialogs", {}).setdefault(suspect_id, [])
+    history = full_history[-_MAX_MEMORY:]
 
     # динамика напряжения: тон игрока двигает «градус» подозреваемого
     pressure = state.setdefault("suspect_pressure", {}).get(suspect_id, 0)
@@ -95,7 +97,8 @@ async def respond(
         mood=mood_instruction,
     )
 
-    parts = [f"История допроса: {history}"]
+    transcript = "\n".join(f"Детектив: {h['q']}\nТы: {h['a']}" for h in history) or "(разговор только начинается)"
+    parts = [f"Ваш предыдущий разговор (помни его и не противоречь себе):\n{transcript}"]
     if evidence_text:
         if evidence_breaks:
             parts.append(f"Игрок предъявляет улику против тебя: «{evidence_text}». Она ПРЯМО тебя "
@@ -111,8 +114,7 @@ async def respond(
     answer = await llm.ask(system, "\n".join(parts), temperature=0.85,
                            model=config.llm_model_fast)
 
-    history.append({"q": player_msg, "a": answer})
-    state.setdefault("suspect_dialogs", {})[suspect_id] = history
+    full_history.append({"q": player_msg, "a": answer})
     if suspect_id not in state.setdefault("interrogated", []):
         state["interrogated"].append(suspect_id)
     return answer

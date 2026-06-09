@@ -2,3 +2,4 @@ aiogram>=3.7,<4.0
 openai>=1.40
 aiosqlite>=0.20
 python-dotenv>=1.0
+typing-extensions>=4.0  # NotRequired для Python 3.10

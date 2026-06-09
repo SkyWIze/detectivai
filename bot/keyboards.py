@@ -17,6 +17,12 @@ BTN_ACCUSE = "⚖️ Обвинить"
 BTN_LEAVE = "🚪 В меню"
 
 
+def _short(text: str, limit: int = 64) -> str:
+    """Подпись для кнопки: схлопывает переносы/пробелы и аккуратно укорачивает с «…»."""
+    text = " ".join(text.split())
+    return text if len(text) <= limit else text[: limit - 1].rstrip() + "…"
+
+
 def hide_kb() -> ReplyKeyboardRemove:
     return ReplyKeyboardRemove()
 
@@ -73,8 +79,7 @@ def clues_kb(case: dict, found_ids: list[str]) -> InlineKeyboardMarkup:
     for cid in found_ids:
         clue = next((c for c in case["clues"] if c["id"] == cid), None)
         if clue:
-            label = clue["text"][:48]
-            rows.append([InlineKeyboardButton(text=f"🎴 {label}", callback_data=f"evid:{cid}")])
+            rows.append([InlineKeyboardButton(text=f"🎴 {_short(clue['text'])}", callback_data=f"evid:{cid}")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
@@ -83,8 +88,7 @@ def found_clues_kb(case: dict, found_ids: list[str], *, can_present: bool) -> In
     for cid in found_ids:
         clue = next((c for c in case["clues"] if c["id"] == cid), None)
         if clue:
-            label = clue["text"][:48]
-            rows.append([InlineKeyboardButton(text=f"📄 {label}", callback_data=f"clue:{cid}")])
+            rows.append([InlineKeyboardButton(text=f"📄 {_short(clue['text'])}", callback_data=f"clue:{cid}")])
     if can_present:
         rows.append([InlineKeyboardButton(text="🎴 Предъявить улику", callback_data="evidence_menu")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
@@ -100,6 +104,6 @@ def cross_suspects_kb(case: dict, available_ids: list[str]) -> InlineKeyboardMar
 def cross_quotes_kb(statements: list[dict], cited_id: str) -> InlineKeyboardMarkup:
     rows = []
     for idx, st in enumerate(statements):
-        label = st["a"][:48]
-        rows.append([InlineKeyboardButton(text=f"🗣 {label}", callback_data=f"xq:{cited_id}:{idx}")])
+        rows.append([InlineKeyboardButton(text=f"🗣 {idx + 1}. {_short(st['a'])}",
+                                          callback_data=f"xq:{cited_id}:{idx}")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
