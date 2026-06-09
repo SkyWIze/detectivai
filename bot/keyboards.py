@@ -96,6 +96,14 @@ def found_clues_kb(case: dict, found_ids: list[str], *, can_present: bool) -> In
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
+def clue_detail_kb(clue_id: str, *, analyzed: bool) -> InlineKeyboardMarkup:
+    """Кнопка под карточкой улики: отправить на экспертизу (или перечитать отчёт)."""
+    label = "🔬 Отчёт экспертизы" if analyzed else "🔬 Отправить на экспертизу (−1 ход)"
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text=label, callback_data=f"lab:{clue_id}")],
+    ])
+
+
 def cross_suspects_kb(case: dict, available_ids: list[str]) -> InlineKeyboardMarkup:
     rows = [[InlineKeyboardButton(
         text=next(s["name"] for s in case["suspects"] if s["id"] == sid),

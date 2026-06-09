@@ -11,7 +11,7 @@ from aiogram.types import CallbackQuery, Message
 
 from bot import keyboards as kb
 from bot.states import Game
-from core import case_gen, hint, interrogate, judge, scoring, search, watson
+from core import case_gen, forensics, hint, interrogate, judge, scoring, search, watson
 from core.models import empty_state
 from core.sample_case import get_sample_case
 from config import config
@@ -108,11 +108,17 @@ def _notebook(case: dict, sess: dict) -> str:
                     leads.append(f"Улика «{clue['text']}» ломает версию по улике «{target['text']}».")
     false_leads = "\n".join(f"• {line}" for line in leads) or "—"
     contradictions = "\n".join(f"• {c['note']}" for c in st["noted_contradictions"]) or "—"
+    clue_text = {c["id"]: c["text"] for c in case["clues"]}
+    exams = "\n".join(
+        f"• <b>{clue_text.get(cid, 'улика')}</b>: {report}"
+        for cid, report in st.get("analysis", {}).items()
+    ) or "—"
     return (f"📋 <b>Блокнот сыщика</b>\n\n"
             f"⏳ Ходов осталось: {sess['moves_left']}\n\n"
             f"<b>Допрошены:</b> {interrogated}\n\n"
             f"<b>Улики:</b>\n{clues}\n\n"
             f"<b>Документы и тексты:</b>\n{documents}\n\n"
+            f"<b>Экспертизы:</b>\n{exams}\n\n"
             f"<b>Рабочие выводы:</b>\n{notes}\n\n"
             f"<b>Версии и опровержения:</b>\n{false_leads}\n\n"
             f"<b>Противоречия:</b>\n{contradictions}\n\n"
@@ -178,6 +184,8 @@ _TUTORIAL_INTRO = (
     "• <b>👤 Допросить</b> — выбери подозреваемого и спрашивай своими словами.\n"
     "• <b>🔍 Осмотреть</b> — обыщи локации, пиши что осмотреть (напр. «осмотреть стол»).\n"
     "• <b>🎴 Улики</b> — предъяви найденную улику в допросе, чтобы расколоть лжеца.\n"
+    "• <b>🔬 Экспертиза</b> — открой улику в «🎴 Улики» и отправь на анализ (−1 ход): "
+    "узнаешь чьи следы, подлинность документа, связь с алиби и не подброшена ли она.\n"
     "• <b>🗣 Очная ставка</b> — припри одного показаниями другого.\n"
     "• <b>📋 Блокнот</b> — что нашёл и кого допросил.\n"
     "• <b>⚖️ Обвинить</b> — назови убийцу и обоснуй. Ходы ограничены!\n\n"
@@ -261,7 +269,39 @@ async def read_clue(cb: CallbackQuery) -> None:
     if not clue:
         return await cb.answer("Улика не найдена.", show_alert=True)
     await cb.answer()
-    await cb.message.answer(_format_clue_details(case, sess, clue))
+    analyzed = clue_id in sess["state"].get("analysis", {})
+    await cb.message.answer(_format_clue_details(case, sess, clue),
+                            reply_markup=kb.clue_detail_kb(clue_id, analyzed=analyzed))
+
+
+@router.callback_query(F.data.startswith("lab:"))
+async def run_forensics(cb: CallbackQuery) -> None:
+    clue_id = cb.data.split(":", 1)[1]
+    case, sess = await _load(cb.from_user.id)
+    if not case:
+        return await cb.answer("Нет активного дела.", show_alert=True)
+    if clue_id not in sess["state"].get("found_clues", []):
+        return await cb.answer("Эту улику ты ещё не находил.", show_alert=True)
+
+    already = clue_id in sess["state"].get("analysis", {})
+    await cb.answer()
+    if not already:
+        if not await _charge_move(cb.from_user.id, sess):
+            return await cb.message.answer(_OUT_OF_MOVES)
+
+    report = await forensics.analyze(case, sess["state"], clue_id)
+    if report is None:
+        return await cb.message.answer("Улика не найдена.")
+    await database.save_session(cb.from_user.id, sess["case_id"], "active",
+                                sess["moves_left"], sess["state"])
+    clue = next((c for c in case["clues"] if c["id"] == clue_id), None)
+    title = clue["text"] if clue else "улика"
+    suffix = "" if already else f"\n\n⏳ Ходов осталось: {sess['moves_left']}"
+    await cb.message.answer(f"🔬 <b>Экспертиза</b> — {title}\n\n{report}{suffix}")
+    if not already:
+        line = await watson.comment(case, sess["state"], "clue", detail=f"экспертиза: {report}")
+        if line:
+            await cb.message.answer(line)
 
 
 @router.message(F.text == kb.BTN_CROSS)

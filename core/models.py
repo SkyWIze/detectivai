@@ -64,6 +64,7 @@ class SessionState(TypedDict):
     noted_contradictions: list[dict]
     hints_used: int
     suspect_dialogs: dict[str, list[dict]]
+    analysis: dict[str, str]  # clue_id -> текст отчёта экспертизы
 
 
 def empty_state() -> SessionState:
@@ -73,4 +74,5 @@ def empty_state() -> SessionState:
         "noted_contradictions": [],
         "hints_used": 0,
         "suspect_dialogs": {},
+        "analysis": {},
     }
